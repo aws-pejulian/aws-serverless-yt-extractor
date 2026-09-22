@@ -1,5 +1,5 @@
 # Amazon Linux 2023 Lambda base. CDK builds this for linux/amd64.
-FROM public.ecr.aws/lambda/nodejs:22 AS build
+FROM public.ecr.aws/lambda/nodejs:24 AS build
 WORKDIR /build
 RUN npm install --global esbuild@0.28.2
 COPY src/backend /build/src/backend
@@ -8,14 +8,14 @@ RUN npm install --prefix /build @aws-sdk/cloudfront-signer@3.1138.0 \
     && esbuild /build/src/backend/handler.ts \
         --bundle \
         --platform=node \
-        --target=node22 \
+        --target=node24 \
         --format=esm \
         --outfile=/out/index.js \
         --external:@aws-sdk/client-s3 \
         --external:@aws-sdk/client-sns \
         --external:@aws-sdk/client-ssm
 
-FROM public.ecr.aws/lambda/nodejs:22
+FROM public.ecr.aws/lambda/nodejs:24
 
 ARG YT_DLP_VERSION=2026.08.19
 ARG FFMPEG_ARCHIVE=https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz

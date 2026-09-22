@@ -161,7 +161,7 @@ describe('AudioExtractorStack', () => {
     });
 
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'nodejs22.x',
+      Runtime: 'nodejs24.x',
       MemorySize: 1024,
       ReservedConcurrentExecutions: 50,
       Handler: 'server/entry_aws-lambda.handler',

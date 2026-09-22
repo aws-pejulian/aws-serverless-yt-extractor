@@ -177,14 +177,14 @@ export class AudioExtractorStack extends cdk.Stack {
     });
     const notifier = new NodejsFunction(this, 'Notifier', {
       entry: path.join(projectRoot, 'src/notify/handler.ts'),
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       memorySize: 128,
       timeout: cdk.Duration.seconds(15),
       logGroup: notifierLogGroup,
       environment: { FROM_EMAIL: config.fromEmail },
       bundling: {
         format: OutputFormat.ESM,
-        target: 'node22',
+        target: 'node24',
         externalModules: ['@aws-sdk/*'],
         minify: true,
       },
@@ -209,7 +209,7 @@ export class AudioExtractorStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     const web = new lambda.Function(this, 'Web', {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'server/entry_aws-lambda.handler',
       code: lambda.Code.fromAsset(props.webAssetPath ?? path.join(projectRoot, 'build/web-lambda')),
       memorySize: 1024,
@@ -304,7 +304,7 @@ export class AudioExtractorStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     const signingFn = new lambda.Function(this, 'SigningKeyFn', {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'index.handler',
       code: lambda.Code.fromInline(SIGNING_KEY_HANDLER),
       timeout: cdk.Duration.seconds(30),

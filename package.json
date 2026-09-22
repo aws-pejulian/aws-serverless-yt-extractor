@@ -6,7 +6,7 @@
   "description": "Serverless YouTube audio extractor. Qwik on Lambda, yt-dlp in a container image, S3 and SES.",
   "packageManager": "pnpm@12.5.1",
   "engines": {
-    "node": ">=22",
+    "node": ">=24",
     "pnpm": ">=12"
   },
   "scripts": {
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@builder.io/qwik": "^1.20.0",
     "@builder.io/qwik-city": "^1.20.0",
-    "@types/node": "^22.20.4",
+    "@types/node": "^24.0.0",
     "aws-cdk": "^2.1142.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.20.5",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadGitHubConfig, loadSiteConfig } from '../lib/site-config.js';
+import { loadSiteConfig } from '../lib/site-config.js';
 
 const complete = {
   HOSTED_ZONE_ID: 'Z01113202LCYIASZV1KVG',
@@ -29,25 +29,5 @@ describe('loadSiteConfig', () => {
   it('rejects a missing hosted zone id', () => {
     const env = { ...complete, HOSTED_ZONE_ID: '  ' };
     expect(() => loadSiteConfig(env)).toThrow(/HOSTED_ZONE_ID/);
-  });
-});
-
-describe('loadGitHubConfig', () => {
-  it('reads the repository allowed to deploy', () => {
-    expect(
-      loadGitHubConfig({
-        GITHUB_REPOSITORY: 'pejulian/aws-serverless-yt-extractor',
-        GITHUB_BRANCH: 'main',
-      }),
-    ).toEqual({
-      repository: 'pejulian/aws-serverless-yt-extractor',
-      branch: 'main',
-    });
-  });
-
-  it('rejects a repository that is not owner/name', () => {
-    expect(() => loadGitHubConfig({ GITHUB_REPOSITORY: 'pejulian', GITHUB_BRANCH: 'main' })).toThrow(
-      /owner\/name/,
-    );
   });
 });

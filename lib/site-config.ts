@@ -40,30 +40,3 @@ export function loadSiteConfig(env: NodeJS.ProcessEnv = process.env): SiteConfig
 
   return config;
 }
-
-export interface GitHubConfig {
-  repository: string;
-  branch: string;
-  /** Set when this account already has a GitHub OIDC provider. */
-  providerArn?: string;
-}
-
-/** Repository allowed to assume the deploy role, for example `owner/name`. */
-export function loadGitHubConfig(env: NodeJS.ProcessEnv = process.env): GitHubConfig {
-  const repository = env.GITHUB_REPOSITORY?.trim() ?? '';
-  const branch = env.GITHUB_BRANCH?.trim() ?? '';
-  const missing = [
-    repository ? undefined : 'GITHUB_REPOSITORY',
-    branch ? undefined : 'GITHUB_BRANCH',
-  ].filter((name): name is string => name !== undefined);
-
-  if (missing.length > 0) {
-    throw new Error(`Missing configuration: ${missing.join(', ')}. Source .env before starting the CDK app.`);
-  }
-  if (!/^[^/\s]+\/[^/\s]+$/.test(repository)) {
-    throw new Error('GITHUB_REPOSITORY must look like owner/name.');
-  }
-
-  const providerArn = env.GITHUB_OIDC_PROVIDER_ARN?.trim();
-  return { repository, branch, ...(providerArn ? { providerArn } : {}) };
-}

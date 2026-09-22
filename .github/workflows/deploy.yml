@@ -18,13 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
@@ -51,7 +51,7 @@ jobs:
           done
           exit "$missing"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.APP_REGION }}
@@ -67,9 +67,6 @@ jobs:
           APP_REGION: ${{ vars.APP_REGION }}
           CERTIFICATE_REGION: ${{ vars.CERTIFICATE_REGION }}
           QUEUED_MESSAGE: ${{ vars.QUEUED_MESSAGE }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_BRANCH: ${{ github.ref_name }}
-          GITHUB_OIDC_PROVIDER_ARN: ${{ vars.GITHUB_OIDC_PROVIDER_ARN }}
         run: |
           umask 077
           cat > .env << EOF
@@ -81,12 +78,7 @@ jobs:
           APP_REGION=${APP_REGION}
           CERTIFICATE_REGION=${CERTIFICATE_REGION}
           QUEUED_MESSAGE='${QUEUED_MESSAGE}'
-          GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
-          GITHUB_BRANCH=${GITHUB_BRANCH}
           EOF
-          if [ -n "$GITHUB_OIDC_PROVIDER_ARN" ]; then
-            printf 'GITHUB_OIDC_PROVIDER_ARN=%s\n' "$GITHUB_OIDC_PROVIDER_ARN" >> .env
-          fi
 
       - name: Deploy
-        run: pnpm deploy -- --all --require-approval never
+        run: pnpm run deploy --all --require-approval never
