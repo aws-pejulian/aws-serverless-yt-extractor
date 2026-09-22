@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-debug.log*
+dist/
+build/
+cdk.out/
+coverage/
+*.tsbuildinfo
+src/frontend/dist/
+src/frontend/server/
+src/frontend/tmp/
+.DS_Store
+.env
+.env.*
+*.local
+!src/frontend/src/**

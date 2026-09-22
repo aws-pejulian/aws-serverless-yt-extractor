@@ -1,0 +1,43 @@
+{
+  "name": "aws-serverless-yt-extractor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Serverless YouTube audio extractor. Qwik on Lambda, yt-dlp in a container image, S3 and SES.",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=12"
+  },
+  "scripts": {
+    "build:web": "vite build --config src/frontend/vite.config.ts && vite build --config src/frontend/adapters/aws-lambda/vite.config.ts && node scripts/package-web.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cdk": "cdk",
+    "synth": "pnpm build:web && cdk synth",
+    "deploy": "pnpm build:web && cdk deploy"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/client-ses": "^3.901.0",
+    "@aws-sdk/client-sns": "^3.1138.0",
+    "@aws-sdk/client-sqs": "^3.1138.0",
+    "@aws-sdk/client-ssm": "^3.1138.0",
+    "@aws-sdk/cloudfront-signer": "^3.1138.0",
+    "aws-cdk-lib": "^2.270.0",
+    "constructs": "^10.8.1",
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "@builder.io/qwik": "^1.20.0",
+    "@builder.io/qwik-city": "^1.20.0",
+    "@types/node": "^22.20.4",
+    "aws-cdk": "^2.1142.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^5.0.1"
+  }
+}
