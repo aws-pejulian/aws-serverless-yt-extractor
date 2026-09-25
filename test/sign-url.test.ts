@@ -12,7 +12,7 @@ describe('signCloudFrontDownload', () => {
     });
     const now = new Date('2026-09-22T12:00:00.000Z');
     const signed = signCloudFrontDownload({
-      baseUrl: 'https://yt-audio-extrator.julian-pereira.com',
+      baseUrl: 'https://yt-audio-extractor.julian-pereira.com',
       objectKey: 'audio/track.mp3',
       keyPairId: 'KTESTKEY',
       privateKey,
@@ -21,7 +21,7 @@ describe('signCloudFrontDownload', () => {
     });
     const url = new URL(signed);
 
-    expect(url.origin + url.pathname).toBe('https://yt-audio-extrator.julian-pereira.com/audio/track.mp3');
+    expect(url.origin + url.pathname).toBe('https://yt-audio-extractor.julian-pereira.com/audio/track.mp3');
     expect(url.searchParams.get('Key-Pair-Id')).toBe('KTESTKEY');
     expect(url.searchParams.get('Signature')).toBeTruthy();
     expect(url.searchParams.get('Expires')).toBe(String(Math.floor(now.getTime() / 1000) + DOWNLOAD_TTL_SECONDS));

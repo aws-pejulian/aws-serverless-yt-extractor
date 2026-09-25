@@ -39,7 +39,7 @@ function deps(overrides: Partial<ExtractorDeps> = {}): ExtractorDeps & {
     },
     signDownloadUrl: async (objectKey, expiresInSeconds) => {
       signed.push({ key: objectKey, expiresInSeconds });
-      return `https://yt-audio-extrator.julian-pereira.com/${objectKey}?Signature=test`;
+      return `https://yt-audio-extractor.julian-pereira.com/${objectKey}?Signature=test`;
     },
     uuid: () => '11111111-1111-4111-8111-111111111111',
     bucket: 'audio-bucket',
@@ -92,7 +92,7 @@ describe('processExtraction', () => {
         email: 'listener@example.com',
         status: 'ready',
         downloadUrl:
-          'https://yt-audio-extrator.julian-pereira.com/audio/11111111-1111-4111-8111-111111111111.mp3?Signature=test',
+          'https://yt-audio-extractor.julian-pereira.com/audio/11111111-1111-4111-8111-111111111111.mp3?Signature=test',
       },
     ]);
   });

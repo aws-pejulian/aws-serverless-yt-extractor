@@ -13,12 +13,11 @@ const fixture = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixture
 const config: SiteConfig = {
   hostedZoneId: 'Z01113202LCYIASZV1KVG',
   rootDomain: 'julian-pereira.com',
-  siteDomain: 'yt-audio-extrator.julian-pereira.com',
+  siteDomain: 'yt-audio-extractor.julian-pereira.com',
   fromEmail: 'noreply@julian-pereira.com',
   geoCountryCode: 'MY',
   appRegion: 'ap-southeast-1',
   certificateRegion: 'us-east-1',
-  queuedMessage: 'Your request is in the queue! Check your email in a few minutes',
 };
 
 function synthesize(): { app: Template; certificate: Template; region: string } {
@@ -55,15 +54,16 @@ describe('AudioExtractorStack', () => {
     expect(synthesized.region).toBe('ap-southeast-1');
     expect(synthesized.certificate.toJSON()).toBeTruthy();
     synthesized.certificate.hasResourceProperties('AWS::CertificateManager::Certificate', {
-      DomainName: 'yt-audio-extrator.julian-pereira.com',
+      DomainName: 'yt-audio-extractor.julian-pereira.com',
     });
   });
 
   it('allowlists Malaysia on CloudFront and signs audio downloads', () => {
     template.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({
-        Aliases: ['yt-audio-extrator.julian-pereira.com'],
-        IPV6Enabled: true,
+        Aliases: ['yt-audio-extractor.julian-pereira.com'],
+        IPV6Enabled: false,
+        PriceClass: 'PriceClass_100',
         Restrictions: {
           GeoRestriction: {
             RestrictionType: 'whitelist',
@@ -115,16 +115,15 @@ describe('AudioExtractorStack', () => {
     });
   });
 
-  it('geolocates the A and AAAA aliases to Malaysia', () => {
-    for (const type of ['A', 'AAAA']) {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Type: type,
-        Name: 'yt-audio-extrator.julian-pereira.com.',
-        HostedZoneId: config.hostedZoneId,
-        SetIdentifier: 'my',
-        GeoLocation: { CountryCode: 'MY' },
-      });
-    }
+  it('geolocates the A alias to Malaysia', () => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Type: 'A',
+      Name: 'yt-audio-extractor.julian-pereira.com.',
+      HostedZoneId: config.hostedZoneId,
+      SetIdentifier: 'my',
+      GeoLocation: { CountryCode: 'MY' },
+    });
+    template.resourcePropertiesCountIs('AWS::Route53::RecordSet', { Type: 'AAAA' }, 0);
   });
 
   it('queues work for the 15-minute extractor and serves Qwik with 1024 MB', () => {
@@ -133,16 +132,10 @@ describe('AudioExtractorStack', () => {
       VisibilityTimeout: 5400,
       MessageRetentionPeriod: 172800,
     });
-    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
-      StageName: '$default',
-      DefaultRouteSettings: {
-        ThrottlingRateLimit: 10,
-        ThrottlingBurstLimit: 5,
-      },
-    });
+    template.resourceCountIs('AWS::ApiGatewayV2::Api', 0);
     template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
       BatchSize: 1,
-      ScalingConfig: { MaximumConcurrency: 50 },
+      ScalingConfig: { MaximumConcurrency: 10 },
       FunctionResponseTypes: ['ReportBatchItemFailures'],
     });
     const logGroups = template.findResources('AWS::Logs::LogGroup');
@@ -156,7 +149,7 @@ describe('AudioExtractorStack', () => {
       PackageType: 'Image',
       MemorySize: 2048,
       Timeout: 900,
-      ReservedConcurrentExecutions: 50,
+      ReservedConcurrentExecutions: 10,
       EphemeralStorage: { Size: 2048 },
     });
 
@@ -167,24 +160,40 @@ describe('AudioExtractorStack', () => {
       Handler: 'server/entry_aws-lambda.handler',
       Environment: {
         Variables: Match.objectLike({
-          QUEUED_MESSAGE: config.queuedMessage,
+          QUOTA_TABLE_NAME: Match.anyValue(),
         }),
       },
+    });
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      BillingMode: 'PAY_PER_REQUEST',
+      KeySchema: [{ AttributeName: 'day', KeyType: 'HASH' }],
+      TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true },
     });
   });
 
   it('keeps the site behind CloudFront and limits queue, object, and email permissions', () => {
-    template.resourceCountIs('AWS::Lambda::Url', 0);
-    template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
-    template.hasResourceProperties('AWS::CloudFront::Distribution', {
-      DistributionConfig: Match.objectLike({
-        Origins: Match.arrayWith([
-          Match.objectLike({
-            OriginCustomHeaders: Match.arrayWith([
-              Match.objectLike({ HeaderName: 'X-Origin-Verify' }),
-            ]),
-          }),
-        ]),
+    template.resourceCountIs('AWS::Lambda::Url', 1);
+    template.resourceCountIs('AWS::ApiGatewayV2::Api', 0);
+    template.hasResourceProperties('AWS::Lambda::Url', {
+      AuthType: 'AWS_IAM',
+    });
+    template.hasResourceProperties('AWS::CloudFront::OriginAccessControl', {
+      OriginAccessControlConfig: Match.objectLike({
+        OriginAccessControlOriginType: 'lambda',
+        SigningBehavior: 'always',
+        SigningProtocol: 'sigv4',
+      }),
+    });
+    template.hasResourceProperties('AWS::Lambda::Permission', {
+      Action: 'lambda:InvokeFunctionUrl',
+      Principal: 'cloudfront.amazonaws.com',
+    });
+    template.hasResourceProperties('AWS::CloudFront::OriginRequestPolicy', {
+      OriginRequestPolicyConfig: Match.objectLike({
+        HeadersConfig: Match.objectLike({
+          HeaderBehavior: 'allExcept',
+          Headers: Match.arrayWith(['host', 'authorization']),
+        }),
       }),
     });
 
@@ -193,6 +202,14 @@ describe('AudioExtractorStack', () => {
         Statement: Match.arrayWith([
           Match.objectLike({
             Action: Match.arrayWith(['sqs:SendMessage']),
+            Effect: 'Allow',
+          }),
+          Match.objectLike({
+            Action: 'sqs:GetQueueAttributes',
+            Effect: 'Allow',
+          }),
+          Match.objectLike({
+            Action: 'dynamodb:UpdateItem',
             Effect: 'Allow',
           }),
         ]),

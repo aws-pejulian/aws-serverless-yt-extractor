@@ -1,5 +1,5 @@
 {
-  "app": "set -a && . ./.env && set +a && pnpm exec tsx bin/app.ts",
+  "app": "pnpm exec tsx bin/app.ts",
   "watch": {
     "include": [
       "bin/**/*.ts",

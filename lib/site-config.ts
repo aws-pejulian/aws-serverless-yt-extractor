@@ -6,7 +6,6 @@ export interface SiteConfig {
   geoCountryCode: string;
   appRegion: string;
   certificateRegion: string;
-  queuedMessage: string;
 }
 
 const fields = {
@@ -17,10 +16,9 @@ const fields = {
   geoCountryCode: 'GEO_COUNTRY_CODE',
   appRegion: 'APP_REGION',
   certificateRegion: 'CERTIFICATE_REGION',
-  queuedMessage: 'QUEUED_MESSAGE',
 } as const satisfies Record<keyof SiteConfig, string>;
 
-/** Reads site settings from the process environment. The CDK app sources `.env` first. */
+/** Reads site settings from the process environment. */
 export function loadSiteConfig(env: NodeJS.ProcessEnv = process.env): SiteConfig {
   const missing: string[] = [];
   const config = {} as SiteConfig;
@@ -35,7 +33,7 @@ export function loadSiteConfig(env: NodeJS.ProcessEnv = process.env): SiteConfig
   }
 
   if (missing.length > 0) {
-    throw new Error(`Missing configuration: ${missing.join(', ')}. Source .env before starting the CDK app.`);
+    throw new Error(`Missing configuration: ${missing.join(', ')}.`);
   }
 
   return config;

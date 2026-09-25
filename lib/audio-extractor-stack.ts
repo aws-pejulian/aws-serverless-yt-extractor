@@ -1,10 +1,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
-import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -27,8 +26,6 @@ import type { SiteConfig } from './site-config.js';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const privateKeyParameter = '/yt-audio-extractor/cloudfront-private-key';
 const publicKeyParameter = '/yt-audio-extractor/cloudfront-public-key';
-const originSecretParameter = '/yt-audio-extractor/origin-verify-secret';
-
 export interface SiteCertificateStackProps extends cdk.StackProps {
   config: SiteConfig;
 }
@@ -134,7 +131,7 @@ export class AudioExtractorStack extends cdk.Stack {
       memorySize: 2048,
       ephemeralStorageSize: cdk.Size.mebibytes(2048),
       timeout: extractorTimeout,
-      reservedConcurrentExecutions: 50,
+      reservedConcurrentExecutions: 10,
       logGroup: extractorLogGroup,
       environment: {
         BUCKET_NAME: audioBucket.bucketName,
@@ -149,7 +146,7 @@ export class AudioExtractorStack extends cdk.Stack {
     extractor.addEventSource(
       new SqsEventSource(queue, {
         batchSize: 1,
-        maxConcurrency: 50,
+        maxConcurrency: 10,
         reportBatchItemFailures: true,
       }),
     );
@@ -204,6 +201,13 @@ export class AudioExtractorStack extends cdk.Stack {
       }),
     );
 
+    const jobQuota = new dynamodb.Table(this, 'JobQuota', {
+      partitionKey: { name: 'day', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const webLogGroup = new logs.LogGroup(this, 'WebLogs', {
       retention: logs.RetentionDays.THREE_DAYS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -218,44 +222,39 @@ export class AudioExtractorStack extends cdk.Stack {
       logGroup: webLogGroup,
       environment: {
         QUEUE_URL: queue.queueUrl,
-        ORIGIN: `https://${config.siteDomain}`,
-        ORIGIN_VERIFY_SECRET: signingKey.getAttString('OriginVerifySecret'),
-        QUEUED_MESSAGE: config.queuedMessage,
+        QUOTA_TABLE_NAME: jobQuota.tableName,
       },
       description: 'Qwik SSR frontend. Validates a request and enqueues it.',
     });
     queue.grantSendMessages(web);
+    queue.grant(web, 'sqs:GetQueueAttributes');
+    jobQuota.grant(web, 'dynamodb:UpdateItem');
 
-    // CloudFront is the public entry. The origin header stops callers from
-    // skipping CloudFront and its Malaysia geo restriction.
-    const httpApi = new apigwv2.HttpApi(this, 'WebApi', {
-      createDefaultStage: false,
-      defaultIntegration: new HttpLambdaIntegration('WebIntegration', web),
+    // IAM auth plus CloudFront origin access control. A direct call to the
+    // function URL has no CloudFront signature, so Lambda rejects it.
+    const webUrl = web.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });
-    httpApi.addStage('DefaultStage', {
-      stageName: '$default',
-      autoDeploy: true,
-      throttle: { rateLimit: 10, burstLimit: 5 },
-    });
-    const webOrigin = new origins.HttpOrigin(`${httpApi.apiId}.execute-api.${cdk.Aws.REGION}.amazonaws.com`, {
-      customHeaders: {
-        'X-Origin-Verify': signingKey.getAttString('OriginVerifySecret'),
-      },
+    const webOrigin = origins.FunctionUrlOrigin.withOriginAccessControl(webUrl);
+    const webOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'WebOriginRequest', {
+      cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.denyList('host', 'authorization'),
+      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
     });
 
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       certificate: props.certificate,
       domainNames: [config.siteDomain],
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
-      enableIpv6: true,
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      enableIpv6: false,
       geoRestriction: cloudfront.GeoRestriction.allowlist(config.geoCountryCode),
       defaultBehavior: {
         origin: webOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        originRequestPolicy: webOriginRequestPolicy,
         responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
       },
       additionalBehaviors: {
@@ -264,7 +263,7 @@ export class AudioExtractorStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          originRequestPolicy: webOriginRequestPolicy,
         },
         '/audio/*': {
           origin: audioOrigin,
@@ -279,13 +278,6 @@ export class AudioExtractorStack extends cdk.Stack {
     const aliasTarget = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution));
     const geoLocation = route53.GeoLocation.country(config.geoCountryCode);
     new route53.ARecord(this, 'SiteA', {
-      zone,
-      recordName: config.siteDomain,
-      target: aliasTarget,
-      geoLocation,
-      setIdentifier: config.geoCountryCode.toLowerCase(),
-    });
-    new route53.AaaaRecord(this, 'SiteAAAA', {
       zone,
       recordName: config.siteDomain,
       target: aliasTarget,
@@ -334,7 +326,6 @@ export class AudioExtractorStack extends cdk.Stack {
       properties: {
         PrivateParameterName: privateKeyParameter,
         PublicParameterName: publicKeyParameter,
-        OriginParameterName: originSecretParameter,
       },
     });
   }

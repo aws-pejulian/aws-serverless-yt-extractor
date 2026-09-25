@@ -1,8 +1,6 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -40,10 +38,9 @@ jobs:
           GEO_COUNTRY_CODE: ${{ vars.GEO_COUNTRY_CODE }}
           APP_REGION: ${{ vars.APP_REGION }}
           CERTIFICATE_REGION: ${{ vars.CERTIFICATE_REGION }}
-          QUEUED_MESSAGE: ${{ vars.QUEUED_MESSAGE }}
         run: |
           missing=0
-          for name in AWS_DEPLOY_ROLE_ARN HOSTED_ZONE_ID ROOT_DOMAIN SITE_DOMAIN FROM_EMAIL GEO_COUNTRY_CODE APP_REGION CERTIFICATE_REGION QUEUED_MESSAGE; do
+          for name in AWS_DEPLOY_ROLE_ARN HOSTED_ZONE_ID ROOT_DOMAIN SITE_DOMAIN FROM_EMAIL GEO_COUNTRY_CODE APP_REGION CERTIFICATE_REGION; do
             if [ -z "${!name}" ]; then
               echo "Set the GitHub variable $name"
               missing=1
@@ -57,7 +54,7 @@ jobs:
           aws-region: ${{ vars.APP_REGION }}
           role-session-name: github-actions-deploy
 
-      - name: Write site configuration
+      - name: Deploy
         env:
           HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
           ROOT_DOMAIN: ${{ vars.ROOT_DOMAIN }}
@@ -66,19 +63,4 @@ jobs:
           GEO_COUNTRY_CODE: ${{ vars.GEO_COUNTRY_CODE }}
           APP_REGION: ${{ vars.APP_REGION }}
           CERTIFICATE_REGION: ${{ vars.CERTIFICATE_REGION }}
-          QUEUED_MESSAGE: ${{ vars.QUEUED_MESSAGE }}
-        run: |
-          umask 077
-          cat > .env << EOF
-          HOSTED_ZONE_ID=${HOSTED_ZONE_ID}
-          ROOT_DOMAIN=${ROOT_DOMAIN}
-          SITE_DOMAIN=${SITE_DOMAIN}
-          FROM_EMAIL=${FROM_EMAIL}
-          GEO_COUNTRY_CODE=${GEO_COUNTRY_CODE}
-          APP_REGION=${APP_REGION}
-          CERTIFICATE_REGION=${CERTIFICATE_REGION}
-          QUEUED_MESSAGE='${QUEUED_MESSAGE}'
-          EOF
-
-      - name: Deploy
         run: pnpm run deploy --all --require-approval never

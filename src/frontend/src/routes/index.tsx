@@ -4,13 +4,16 @@ import { ExtractForm } from '~/components/extract-form';
 
 export const useExtractAction = routeAction$(async (data, event) => {
   const { submitExtraction } = await import('../server/enqueue');
+  const { consumeDailyJob } = await import('../server/daily-quota');
   const { SQSClient } = await import('@aws-sdk/client-sqs');
+  const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+  const quota = new DynamoDBClient({});
   const result = await submitExtraction(
     { youtubeUrl: data.youtubeUrl, email: data.email },
     {
       queueUrl: process.env.QUEUE_URL,
-      queuedMessage: process.env.QUEUED_MESSAGE,
       client: new SQSClient({}),
+      consumeDailyJob: () => consumeDailyJob(process.env.QUOTA_TABLE_NAME, quota),
     },
   );
   event.status(result.status);

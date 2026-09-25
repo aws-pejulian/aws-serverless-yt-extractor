@@ -9,7 +9,7 @@ describe('deliverNotice', () => {
       JSON.stringify({
         email: 'listener@example.com',
         status: 'ready',
-        downloadUrl: 'https://yt-audio-extrator.julian-pereira.com/audio/a.mp3?Signature=1',
+        downloadUrl: 'https://yt-audio-extractor.julian-pereira.com/audio/a.mp3?Signature=1',
       }),
       {
         fromEmail: 'noreply@julian-pereira.com',

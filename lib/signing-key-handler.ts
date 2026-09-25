@@ -8,27 +8,30 @@ const {
   DeleteParameterCommand,
 } = require('@aws-sdk/client-ssm');
 
+const legacyOriginParameter = '/yt-audio-extractor/origin-verify-secret';
+
 exports.handler = async (event) => {
   const privateName = event.ResourceProperties.PrivateParameterName;
   const publicName = event.ResourceProperties.PublicParameterName;
-  const originName = event.ResourceProperties.OriginParameterName;
   const ssm = new SSMClient({});
 
-  const read = async (name) => {
-    const existing = await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }));
+  const readPublicKey = async () => {
+    const existing = await ssm.send(new GetParameterCommand({ Name: publicName }));
     return existing.Parameter.Value;
   };
-  const data = async () => ({ PublicKeyPem: await read(publicName), OriginVerifySecret: await read(originName) });
+  const forgetOriginSecret = () =>
+    ssm.send(new DeleteParameterCommand({ Name: legacyOriginParameter })).catch(() => undefined);
 
   if (event.RequestType === 'Delete') {
     await ssm.send(new DeleteParameterCommand({ Name: privateName })).catch(() => undefined);
     await ssm.send(new DeleteParameterCommand({ Name: publicName })).catch(() => undefined);
-    await ssm.send(new DeleteParameterCommand({ Name: originName })).catch(() => undefined);
+    await forgetOriginSecret();
     return { PhysicalResourceId: privateName };
   }
 
   if (event.RequestType === 'Update') {
-    return { PhysicalResourceId: privateName, Data: await data() };
+    await forgetOriginSecret();
+    return { PhysicalResourceId: privateName, Data: { PublicKeyPem: await readPublicKey() } };
   }
 
   const { publicKey, privateKey } = generateKeyPairSync('rsa', {
@@ -36,7 +39,6 @@ exports.handler = async (event) => {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
   });
-  const originSecret = require('crypto').randomBytes(32).toString('hex');
 
   try {
     await ssm.send(new PutParameterCommand({
@@ -47,7 +49,8 @@ exports.handler = async (event) => {
     }));
   } catch (error) {
     if (!error || error.name !== 'ParameterAlreadyExists') throw error;
-    return { PhysicalResourceId: privateName, Data: await data() };
+    await forgetOriginSecret();
+    return { PhysicalResourceId: privateName, Data: { PublicKeyPem: await readPublicKey() } };
   }
 
   await ssm.send(new PutParameterCommand({
@@ -56,16 +59,11 @@ exports.handler = async (event) => {
     Value: publicKey,
     Overwrite: true,
   }));
-  await ssm.send(new PutParameterCommand({
-    Name: originName,
-    Type: 'SecureString',
-    Value: originSecret,
-    Overwrite: true,
-  }));
+  await forgetOriginSecret();
 
   return {
     PhysicalResourceId: privateName,
-    Data: { PublicKeyPem: publicKey, OriginVerifySecret: originSecret },
+    Data: { PublicKeyPem: publicKey },
   };
 };
 `;
